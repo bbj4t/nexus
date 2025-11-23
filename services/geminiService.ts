@@ -66,5 +66,32 @@ export const GeminiService = {
       console.error("Transcription Error:", error);
       throw error;
     }
+  },
+
+  // Analyze Image or Video using Gemini 3 Pro
+  analyzeMedia: async (apiKey: string, base64Data: string, mimeType: string, prompt: string) => {
+    const ai = getClient(apiKey);
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            },
+            {
+              text: prompt || "Analyze this media in detail."
+            }
+          ]
+        }
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Media Analysis Error:", error);
+      throw error;
+    }
   }
 };

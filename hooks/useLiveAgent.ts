@@ -18,7 +18,6 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   // Keep a ref to the config so the active session callbacks always see the latest version
-  // This fixes the issue where updating the URL in settings didn't apply to the active session.
   const configRef = useRef(config);
   useEffect(() => {
     configRef.current = config;
@@ -222,12 +221,10 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
                 try {
                   if (fc.name === 'saveToMemory') {
                     const args = fc.args as any;
-                    // CRITICAL FIX: Use configRef.current to access the LATEST config
                     result = await MemoryService.save(args.key, args.value, configRef.current);
                     onMemoryUpdate(); // Refresh UI
                   } else if (fc.name === 'queryMemory') {
                     const args = fc.args as any;
-                    // CRITICAL FIX: Use configRef.current
                     result = await MemoryService.query(args.query, configRef.current);
                   }
                 } catch (e) {
@@ -303,5 +300,34 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
     }
   }, [status, config, onMemoryUpdate]);
 
-  return { connect, disconnect, status, volume, isUserSpeaking, error, messages };
+  const sendTextMessage = useCallback(async (text: string) => {
+    if (!sessionPromiseRef.current) return;
+    const session = await sessionPromiseRef.current;
+    // Send text to the live session as a user turn
+    session.send({
+      clientContent: {
+        turns: [{ role: 'user', parts: [{ text }] }],
+        turnComplete: true
+      }
+    });
+    // Optimistically add to UI
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      role: 'user',
+      text: text,
+      timestamp: Date.now()
+    }]);
+  }, []);
+
+  return { 
+    connect, 
+    disconnect, 
+    status, 
+    volume, 
+    isUserSpeaking, 
+    error, 
+    messages, 
+    setMessages, // Exposed for external injections (e.g. analysis results)
+    sendTextMessage 
+  };
 }

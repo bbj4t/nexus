@@ -24,9 +24,16 @@ export enum AgentStatus {
   ERROR = 'ERROR'
 }
 
+export interface Attachment {
+  type: 'image' | 'video';
+  url: string; // Data URL for display
+  mimeType: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'system';
   text: string;
   timestamp: number;
+  attachment?: Attachment;
 }
