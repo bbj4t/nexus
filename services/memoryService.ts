@@ -2,22 +2,28 @@ import { MemoryItem, AppConfig } from '../types';
 
 export const MemoryService = {
   /**
-   * Fetches the most recent memories added to the DB for display in the UI.
+   * Fetches the most recent memories via the Edge Function.
+   * This avoids needing to configure public RLS policies for the table.
    */
   getRecent: async (config: AppConfig): Promise<MemoryItem[]> => {
     if (!config.supabaseUrl || !config.supabaseKey) return [];
     
     try {
-      // Direct DB query for the UI panel (read-only access via anon key)
-      const response = await fetch(`${config.supabaseUrl}/rest/v1/memories?select=*&order=created_at.desc&limit=5`, {
+      const response = await fetch(`${config.supabaseUrl}/functions/v1/memory-tool`, {
+        method: 'POST',
         headers: {
-          'apikey': config.supabaseKey,
-          'Authorization': `Bearer ${config.supabaseKey}`
-        }
+          'Authorization': `Bearer ${config.supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'get_recent'
+        })
       });
       
       if (!response.ok) throw new Error('Failed to fetch recent memories');
-      return await response.json();
+      
+      const data = await response.json();
+      return data.memories || [];
     } catch (e) {
       console.error("Memory Fetch Error", e);
       return [];
