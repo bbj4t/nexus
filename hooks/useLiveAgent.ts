@@ -17,6 +17,13 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
+  // Keep a ref to the config so the active session callbacks always see the latest version
+  // This fixes the issue where updating the URL in settings didn't apply to the active session.
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
   // Audio Context Refs
   const inputContextRef = useRef<AudioContext | null>(null);
   const outputContextRef = useRef<AudioContext | null>(null);
@@ -215,12 +222,13 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
                 try {
                   if (fc.name === 'saveToMemory') {
                     const args = fc.args as any;
-                    // Pass current config to service
-                    result = await MemoryService.save(args.key, args.value, config);
+                    // CRITICAL FIX: Use configRef.current to access the LATEST config
+                    result = await MemoryService.save(args.key, args.value, configRef.current);
                     onMemoryUpdate(); // Refresh UI
                   } else if (fc.name === 'queryMemory') {
                     const args = fc.args as any;
-                    result = await MemoryService.query(args.query, config);
+                    // CRITICAL FIX: Use configRef.current
+                    result = await MemoryService.query(args.query, configRef.current);
                   }
                 } catch (e) {
                   console.error(e);

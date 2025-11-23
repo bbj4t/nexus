@@ -23,7 +23,16 @@ export function ConfigModal({ isOpen, onClose, config, onSave }: ConfigModalProp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Clean data before saving
+    const cleanedData = {
+      ...formData,
+      apiKey: formData.apiKey.trim(),
+      supabaseUrl: formData.supabaseUrl.trim(),
+      supabaseKey: formData.supabaseKey.trim(),
+    };
+
+    onSave(cleanedData);
     onClose();
   };
 
