@@ -13,6 +13,11 @@ export interface AppConfig {
   systemInstruction: string;
   vadThreshold: number;
   vadSilenceTimeout: number;
+  // Custom Chat LLM Settings
+  chatProvider: 'gemini' | 'custom';
+  customBaseUrl: string;
+  customApiKey: string;
+  customModelName: string;
 }
 
 export enum AgentStatus {

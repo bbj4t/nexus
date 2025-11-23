@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLiveAgent } from './hooks/useLiveAgent';
 import { MemoryService } from './services/memoryService';
 import { GeminiService } from './services/geminiService';
+import { CustomLlmService } from './services/customLlmService';
 import { AgentStatus, AppConfig, MemoryItem } from './types';
 import { ConfigModal } from './components/ConfigModal';
 
@@ -13,13 +14,22 @@ const DEFAULT_CONFIG: AppConfig = {
   supabaseKey: '',
   systemInstruction: 'You are Nexus, a helpful AI assistant with persistent memory. You are concise, friendly, and efficient. When saving to memory, categorize the key accurately.',
   vadThreshold: 0.015,
-  vadSilenceTimeout: 800
+  vadSilenceTimeout: 800,
+  chatProvider: 'gemini',
+  customBaseUrl: '',
+  customApiKey: '',
+  customModelName: ''
 };
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('nexus_config');
-    return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Merge with default to ensure new fields exist
+      return { ...DEFAULT_CONFIG, ...parsed };
+    }
+    return DEFAULT_CONFIG;
   });
   
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -82,16 +92,36 @@ export default function App() {
       // Send to Live Session
       sendTextMessage(text);
     } else {
-      // Send to Standard Chat (Flash Lite or Pro)
+      // Send to Standard Chat (Gemini Flash Lite or Custom LLM)
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }]);
+      
       try {
-        const apiKey = config.apiKey || process.env.API_KEY;
-        if (!apiKey) throw new Error("API Key required");
-        // Using Flash Lite for fast fallback chat
-        const response = await GeminiService.askFast(apiKey, text);
-        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: response || "No response.", timestamp: Date.now() }]);
+        let responseText = '';
+        
+        if (config.chatProvider === 'custom' && config.customBaseUrl) {
+          // Use Custom LLM (OpenRouter / Local)
+          responseText = await CustomLlmService.sendMessage(text, config);
+        } else {
+          // Fallback to Gemini Flash Lite
+          const apiKey = config.apiKey || process.env.API_KEY;
+          if (!apiKey) throw new Error("API Key required for Gemini fallback");
+          responseText = await GeminiService.askFast(apiKey, text);
+        }
+
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'model', 
+          text: responseText || "No response.", 
+          timestamp: Date.now() 
+        }]);
+
       } catch (err: any) {
-        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', text: `Error: ${err.message}`, timestamp: Date.now() }]);
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'system', 
+          text: `Error: ${err.message}`, 
+          timestamp: Date.now() 
+        }]);
       }
     }
   };
@@ -101,9 +131,10 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Analysis ALWAYS uses Gemini 3 Pro (requires Google API Key)
     const apiKey = config.apiKey || process.env.API_KEY;
     if (!apiKey) {
-      alert("Please configure API Key first.");
+      alert("Gemini API Key is required for media analysis, even if using a custom chat LLM.");
       return;
     }
 
@@ -128,7 +159,7 @@ export default function App() {
         setMessages(prev => [...prev, { 
           id: crypto.randomUUID(), 
           role: 'user', 
-          text: `Analying ${isImage ? 'image' : 'video'}...`, 
+          text: `Analyzing ${isImage ? 'image' : 'video'}...`, 
           timestamp: Date.now(),
           attachment: {
             type: isImage ? 'image' : 'video',
@@ -302,7 +333,7 @@ export default function App() {
                 type="button" 
                 onClick={() => fileInputRef.current?.click()}
                 className="text-slate-400 hover:text-blue-400 transition-colors p-2"
-                title="Upload Image or Video"
+                title="Upload Image or Video (Uses Gemini 3 Pro)"
               >
                <i className="fa-solid fa-paperclip"></i>
              </button>
@@ -319,7 +350,7 @@ export default function App() {
                type="text"
                value={inputText}
                onChange={(e) => setInputText(e.target.value)}
-               placeholder={isActive ? "Send text to live agent..." : "Type a message..."}
+               placeholder={isActive ? "Send text to live agent..." : (config.chatProvider === 'custom' ? `Message ${config.customModelName || 'custom LLM'}...` : "Message Gemini...")}
                className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder-slate-500"
              />
 
