@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 
 // Helper to get client with current key
 const getClient = (apiKey: string) => new GoogleGenAI({ apiKey });
@@ -56,7 +56,7 @@ export const GeminiService = {
               }
             },
             {
-              text: "Transcribe this audio exactly as spoken."
+              text: "Transcribe this audio exactly as spoken. Return only the text."
             }
           ]
         }
@@ -64,6 +64,32 @@ export const GeminiService = {
       return response.text;
     } catch (error) {
       console.error("Transcription Error:", error);
+      throw error;
+    }
+  },
+
+  // Text to Speech using Gemini
+  generateSpeech: async (apiKey: string, text: string, voiceName: string = 'Zephyr') => {
+    const ai = getClient(apiKey);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: voiceName as any },
+            },
+          },
+        },
+      });
+      
+      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!audioData) throw new Error("No audio data returned");
+      return audioData;
+    } catch (error) {
+      console.error("TTS Error:", error);
       throw error;
     }
   },
