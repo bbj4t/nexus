@@ -13,6 +13,11 @@ export interface AppConfig {
   systemInstruction: string;
   vadThreshold: number;
   vadSilenceTimeout: number;
+  // Custom Chat LLM Settings
+  chatProvider: 'gemini' | 'custom';
+  customBaseUrl: string;
+  customApiKey: string;
+  customModelName: string;
 }
 
 export enum AgentStatus {
@@ -24,9 +29,16 @@ export enum AgentStatus {
   ERROR = 'ERROR'
 }
 
+export interface Attachment {
+  type: 'image' | 'video';
+  url: string; // Data URL for display
+  mimeType: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'system';
   text: string;
   timestamp: number;
+  attachment?: Attachment;
 }

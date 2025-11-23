@@ -23,7 +23,19 @@ export function ConfigModal({ isOpen, onClose, config, onSave }: ConfigModalProp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Clean data before saving
+    const cleanedData = {
+      ...formData,
+      apiKey: formData.apiKey.trim(),
+      supabaseUrl: formData.supabaseUrl.trim(),
+      supabaseKey: formData.supabaseKey.trim(),
+      customBaseUrl: formData.customBaseUrl?.trim() || '',
+      customApiKey: formData.customApiKey?.trim() || '',
+      customModelName: formData.customModelName?.trim() || ''
+    };
+
+    onSave(cleanedData);
     onClose();
   };
 
@@ -41,7 +53,7 @@ export function ConfigModal({ isOpen, onClose, config, onSave }: ConfigModalProp
           {/* API Key */}
           <div>
             <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-              Google Gemini API Key
+              Google Gemini API Key (for Live & Vision)
             </label>
             <input
               type="password"
@@ -56,7 +68,7 @@ export function ConfigModal({ isOpen, onClose, config, onSave }: ConfigModalProp
            {/* Model Selection */}
            <div>
             <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-              Model
+              Live Agent Model
             </label>
              <select
               name="modelName"
@@ -87,6 +99,85 @@ export function ConfigModal({ isOpen, onClose, config, onSave }: ConfigModalProp
               <option value="Fenrir">Fenrir</option>
               <option value="Zephyr">Zephyr</option>
             </select>
+          </div>
+
+          {/* Chat Provider Settings */}
+          <div className="grid grid-cols-1 gap-4 border-t border-slate-700/50 pt-4 mt-2">
+            <div className="text-xs font-semibold text-blue-400 uppercase">Text Chat Fallback</div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Provider
+              </label>
+              <div className="flex gap-4 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="chatProvider" 
+                    value="gemini"
+                    checked={formData.chatProvider !== 'custom'}
+                    onChange={() => setFormData(prev => ({...prev, chatProvider: 'gemini'}))}
+                    className="accent-blue-500"
+                  />
+                  <span className="text-sm text-gray-300">Gemini (Default)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="chatProvider" 
+                    value="custom"
+                    checked={formData.chatProvider === 'custom'}
+                    onChange={() => setFormData(prev => ({...prev, chatProvider: 'custom'}))}
+                    className="accent-blue-500"
+                  />
+                  <span className="text-sm text-gray-300">Custom / OpenRouter</span>
+                </label>
+              </div>
+            </div>
+
+            {formData.chatProvider === 'custom' && (
+              <div className="space-y-3 pl-3 border-l-2 border-blue-500/30">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                    Base URL (OpenAI Compatible)
+                  </label>
+                  <input
+                    type="text"
+                    name="customBaseUrl"
+                    value={formData.customBaseUrl}
+                    onChange={handleChange}
+                    placeholder="e.g. https://openrouter.ai/api/v1"
+                    className="w-full bg-slate-800/50 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    name="customApiKey"
+                    value={formData.customApiKey}
+                    onChange={handleChange}
+                    placeholder="sk-..."
+                    className="w-full bg-slate-800/50 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                    Model ID
+                  </label>
+                  <input
+                    type="text"
+                    name="customModelName"
+                    value={formData.customModelName}
+                    onChange={handleChange}
+                    placeholder="e.g. deepseek/deepseek-r1 or llama3"
+                    className="w-full bg-slate-800/50 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4 border-t border-slate-700/50 pt-4 mt-2">
