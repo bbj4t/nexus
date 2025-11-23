@@ -1,40 +1,50 @@
 import { AppConfig } from '../types';
-import { getFunctionUrl } from '../utils/supabaseUtils';
 
 export const CustomLlmService = {
   /**
-   * Sends a message to the custom-chat Edge Function, which proxies to the provider.
+   * Sends a message to an OpenAI-compatible endpoint (OpenRouter, Ollama, Local, etc.)
    */
   sendMessage: async (text: string, config: AppConfig): Promise<string> => {
-    if (!config.supabaseUrl || !config.supabaseKey) {
-      throw new Error("Supabase URL and Key are required for Custom LLM Service");
+    if (!config.customBaseUrl) {
+      throw new Error("Custom Base URL is required");
     }
 
-    const endpoint = getFunctionUrl(config.supabaseUrl, 'custom-chat');
-    console.log(`[Custom LLM] Sending to Edge Function: ${endpoint}`);
+    // Normalize URL: remove trailing slash and ensure it targets the completions endpoint if not specified
+    let baseUrl = config.customBaseUrl.trim();
+    while (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    
+    // Most OpenAI compatible servers use /v1/chat/completions
+    // If the user provided "http://localhost:11434", we assume they mean the base.
+    // If they provided "http://localhost:11434/v1", we append /chat/completions.
+    // If they explicitly included /chat/completions, we leave it.
+    let endpoint = baseUrl;
+    if (!endpoint.endsWith('/chat/completions')) {
+      endpoint = `${endpoint}/chat/completions`;
+    }
+
+    console.log(`[Custom LLM] Sending to ${endpoint} with model ${config.customModelName}`);
 
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${config.supabaseKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.customApiKey || 'dummy-key'}` // Some local servers need a dummy key
         },
         body: JSON.stringify({
           model: config.customModelName || 'default',
           messages: [
             { role: 'system', content: config.systemInstruction },
             { role: 'user', content: text }
-          ],
-          config: {
-            // Pass any extra config if needed, e.g. temperature
-          }
+          ]
         })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Edge Function responded with ${response.status}: ${errorText}`);
+        throw new Error(`Provider responded with ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();

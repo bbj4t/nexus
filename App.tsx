@@ -7,18 +7,18 @@ import { AgentStatus, AppConfig, MemoryItem } from './types';
 import { ConfigModal } from './components/ConfigModal';
 
 const DEFAULT_CONFIG: AppConfig = {
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+  apiKey: '', 
   modelName: 'gemini-2.5-flash-native-audio-preview-09-2025',
   voiceName: 'Zephyr',
-  supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
-  supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+  supabaseUrl: '',
+  supabaseKey: '',
   systemInstruction: 'You are Nexus, a helpful AI assistant with persistent memory. You are concise, friendly, and efficient. When saving to memory, categorize the key accurately.',
   vadThreshold: 0.015,
   vadSilenceTimeout: 800,
   chatProvider: 'gemini',
-  customBaseUrl: import.meta.env.VITE_CUSTOM_BASE_URL || '',
-  customApiKey: import.meta.env.VITE_CUSTOM_API_KEY || '',
-  customModelName: import.meta.env.VITE_CUSTOM_MODEL_NAME || ''
+  customBaseUrl: '',
+  customApiKey: '',
+  customModelName: ''
 };
 
 export default function App() {
@@ -26,29 +26,20 @@ export default function App() {
     const saved = localStorage.getItem('nexus_config');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Merge with default to ensure new fields exist, but prefer env vars if saved values are empty
-      return {
-        ...DEFAULT_CONFIG,
-        ...parsed,
-        apiKey: parsed.apiKey || DEFAULT_CONFIG.apiKey,
-        supabaseUrl: parsed.supabaseUrl || DEFAULT_CONFIG.supabaseUrl,
-        supabaseKey: parsed.supabaseKey || DEFAULT_CONFIG.supabaseKey,
-        customBaseUrl: parsed.customBaseUrl || DEFAULT_CONFIG.customBaseUrl,
-        customApiKey: parsed.customApiKey || DEFAULT_CONFIG.customApiKey,
-        customModelName: parsed.customModelName || DEFAULT_CONFIG.customModelName
-      };
+      // Merge with default to ensure new fields exist
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
     return DEFAULT_CONFIG;
   });
-
+  
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  
   const refreshMemory = async () => {
     const recent = await MemoryService.getRecent(config);
     setMemories(recent);
@@ -65,14 +56,14 @@ export default function App() {
     localStorage.setItem('nexus_config', JSON.stringify(newConfig));
   };
 
-  const {
-    connect,
-    disconnect,
-    status,
-    volume,
-    isUserSpeaking,
-    error,
-    messages,
+  const { 
+    connect, 
+    disconnect, 
+    status, 
+    volume, 
+    isUserSpeaking, 
+    error, 
+    messages, 
     setMessages,
     sendTextMessage
   } = useLiveAgent({
@@ -93,7 +84,7 @@ export default function App() {
   const handleSendText = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim()) return;
-
+    
     const text = inputText;
     setInputText('');
 
@@ -103,32 +94,33 @@ export default function App() {
     } else {
       // Send to Standard Chat (Gemini Flash Lite or Custom LLM)
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }]);
-
+      
       try {
         let responseText = '';
-
+        
         if (config.chatProvider === 'custom' && config.customBaseUrl) {
           // Use Custom LLM (OpenRouter / Local)
           responseText = await CustomLlmService.sendMessage(text, config);
         } else {
           // Fallback to Gemini Flash Lite
-          if (!config.supabaseUrl || !config.supabaseKey) throw new Error("Supabase URL and Key required for Gemini fallback");
-          responseText = await GeminiService.askFast(config, text);
+          const apiKey = config.apiKey || process.env.API_KEY;
+          if (!apiKey) throw new Error("API Key required for Gemini fallback");
+          responseText = await GeminiService.askFast(apiKey, text);
         }
 
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: 'model',
-          text: responseText || "No response.",
-          timestamp: Date.now()
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'model', 
+          text: responseText || "No response.", 
+          timestamp: Date.now() 
         }]);
 
       } catch (err: any) {
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: 'system',
-          text: `Error: ${err.message}`,
-          timestamp: Date.now()
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'system', 
+          text: `Error: ${err.message}`, 
+          timestamp: Date.now() 
         }]);
       }
     }
@@ -140,9 +132,9 @@ export default function App() {
     if (!file) return;
 
     // Analysis ALWAYS uses Gemini 3 Pro (requires Google API Key)
-    // Analysis uses Gemini 3 Pro via Edge Function
-    if (!config.supabaseUrl || !config.supabaseKey) {
-      alert("Supabase URL and Key are required for media analysis.");
+    const apiKey = config.apiKey || process.env.API_KEY;
+    if (!apiKey) {
+      alert("Gemini API Key is required for media analysis, even if using a custom chat LLM.");
       return;
     }
 
@@ -155,19 +147,19 @@ export default function App() {
     }
 
     setIsAnalyzing(true);
-
+    
     // Read file as base64
     const reader = new FileReader();
     reader.onload = async () => {
       try {
         const base64Url = reader.result as string;
         const base64Data = base64Url.split(',')[1];
-
+        
         // Add User Message with Attachment placeholder
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: 'user',
-          text: `Analyzing ${isImage ? 'image' : 'video'}...`,
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'user', 
+          text: `Analyzing ${isImage ? 'image' : 'video'}...`, 
           timestamp: Date.now(),
           attachment: {
             type: isImage ? 'image' : 'video',
@@ -178,22 +170,22 @@ export default function App() {
 
         // Call Gemini 3 Pro
         const prompt = isImage ? "Analyze this image in detail." : "Analyze this video and describe what happens.";
-        const analysis = await GeminiService.analyzeMedia(config, base64Data, file.type, prompt);
+        const analysis = await GeminiService.analyzeMedia(apiKey, base64Data, file.type, prompt);
 
         // Add Model Response
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: 'model',
-          text: analysis || "I couldn't analyze the media.",
-          timestamp: Date.now()
+        setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'model', 
+          text: analysis || "I couldn't analyze the media.", 
+          timestamp: Date.now() 
         }]);
 
       } catch (err: any) {
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: 'system',
-          text: `Analysis failed: ${err.message}`,
-          timestamp: Date.now()
+         setMessages(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          role: 'system', 
+          text: `Analysis failed: ${err.message}`, 
+          timestamp: Date.now() 
         }]);
       } finally {
         setIsAnalyzing(false);
@@ -204,12 +196,12 @@ export default function App() {
   };
 
   // Visualizer calculations
-  const visualizerSize = 100 + volume * 300;
-  const visualizerColor = isUserSpeaking
-    ? 'rgba(59, 130, 246, 0.6)'
-    : status === AgentStatus.SPEAKING
-      ? 'rgba(16, 185, 129, 0.6)'
-      : 'rgba(255, 255, 255, 0.1)';
+  const visualizerSize = 100 + volume * 300; 
+  const visualizerColor = isUserSpeaking 
+    ? 'rgba(59, 130, 246, 0.6)' 
+    : status === AgentStatus.SPEAKING 
+      ? 'rgba(16, 185, 129, 0.6)' 
+      : 'rgba(255, 255, 255, 0.1)'; 
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col items-center relative overflow-hidden">
@@ -224,7 +216,7 @@ export default function App() {
           </div>
           <h1 className="font-bold text-xl tracking-tight text-white">NEXUS <span className="text-slate-500 font-light">| Live VAD Agent</span></h1>
         </div>
-        <button
+        <button 
           onClick={() => setIsConfigOpen(true)}
           className="p-2 rounded-full hover:bg-slate-800 transition-colors"
         >
@@ -234,7 +226,7 @@ export default function App() {
 
       {/* Main Area */}
       <main className="flex-1 flex flex-col items-center w-full max-w-3xl z-10 relative px-4 min-h-0">
-
+        
         {/* Status Indicator */}
         <div className="font-mono text-xs uppercase tracking-widest text-slate-500 mb-4">
           {status}
@@ -244,7 +236,7 @@ export default function App() {
         <div className="relative flex items-center justify-center w-48 h-48 mb-6 shrink-0">
           {/* Ripple Effect */}
           {isActive && (
-            <div
+            <div 
               className="absolute rounded-full transition-all duration-75 ease-out border border-white/10"
               style={{
                 width: `${Math.min(250, visualizerSize * 1.5)}px`,
@@ -253,7 +245,7 @@ export default function App() {
               }}
             />
           )}
-
+          
           {/* Core */}
           <button
             onClick={isActive ? disconnect : connect}
@@ -262,12 +254,12 @@ export default function App() {
               ${isActive ? 'bg-slate-800 shadow-[0_0_50px_rgba(59,130,246,0.3)]' : 'bg-slate-800 hover:bg-slate-700 shadow-xl'}
             `}
             style={{
-              transform: isActive ? 'scale(1.1)' : 'scale(1)',
-              boxShadow: isActive ? `0 0 ${30 + volume * 100}px ${visualizerColor}` : ''
+               transform: isActive ? 'scale(1.1)' : 'scale(1)',
+               boxShadow: isActive ? `0 0 ${30 + volume * 100}px ${visualizerColor}` : ''
             }}
           >
             {isActive ? (
-              <i className={`fa-solid ${status === AgentStatus.SPEAKING ? 'fa-waveform' : 'fa-microphone'} text-2xl text-white transition-all`}></i>
+               <i className={`fa-solid ${status === AgentStatus.SPEAKING ? 'fa-waveform' : 'fa-microphone'} text-2xl text-white transition-all`}></i>
             ) : (
               <i className="fa-solid fa-power-off text-2xl text-slate-400"></i>
             )}
@@ -276,16 +268,16 @@ export default function App() {
 
         {/* VAD Status Feedback */}
         <div className="h-6 flex items-center gap-2 mb-2">
-          {isUserSpeaking && (
-            <span className="flex items-center gap-2 text-blue-400 text-xs font-medium animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-              Voice Detected
-            </span>
-          )}
+            {isUserSpeaking && (
+              <span className="flex items-center gap-2 text-blue-400 text-xs font-medium animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                Voice Detected
+              </span>
+            )}
         </div>
 
         {/* Chat History */}
-        <div
+        <div 
           ref={chatContainerRef}
           className="w-full flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent pb-4"
         >
@@ -294,10 +286,10 @@ export default function App() {
               Start speaking or type below...
             </div>
           )}
-
+          
           {messages.map((msg) => (
-            <div
-              key={msg.id}
+            <div 
+              key={msg.id} 
               className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
               {msg.attachment && (
@@ -309,12 +301,12 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div
+              <div 
                 className={`
                   max-w-[80%] px-4 py-2 rounded-2xl text-sm leading-relaxed
-                  ${msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm'
-                    : msg.role === 'system'
+                  ${msg.role === 'user' 
+                    ? 'bg-blue-600 text-white rounded-br-sm' 
+                    : msg.role === 'system' 
                       ? 'bg-red-900/50 text-red-200 border border-red-500/30'
                       : 'bg-slate-800 text-slate-200 rounded-bl-sm border border-slate-700'}
                 `}
@@ -324,53 +316,53 @@ export default function App() {
             </div>
           ))}
           {isAnalyzing && (
-            <div className="flex items-start">
-              <div className="bg-slate-800 text-slate-400 px-4 py-2 rounded-2xl rounded-bl-sm border border-slate-700 text-sm animate-pulse">
-                Thinking...
-              </div>
-            </div>
+             <div className="flex items-start">
+               <div className="bg-slate-800 text-slate-400 px-4 py-2 rounded-2xl rounded-bl-sm border border-slate-700 text-sm animate-pulse">
+                 Thinking...
+               </div>
+             </div>
           )}
         </div>
 
         {/* Input Bar */}
         <div className="w-full relative group">
-          <form onSubmit={handleSendText} className="relative flex items-center gap-2 bg-slate-800/80 backdrop-blur border border-slate-700 rounded-full p-2 pl-4 shadow-xl transition-all focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
+           <form onSubmit={handleSendText} className="relative flex items-center gap-2 bg-slate-800/80 backdrop-blur border border-slate-700 rounded-full p-2 pl-4 shadow-xl transition-all focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
+             
+             {/* File Upload Trigger */}
+             <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()}
+                className="text-slate-400 hover:text-blue-400 transition-colors p-2"
+                title="Upload Image or Video (Uses Gemini 3 Pro)"
+              >
+               <i className="fa-solid fa-paperclip"></i>
+             </button>
+             <input 
+               type="file" 
+               ref={fileInputRef} 
+               className="hidden" 
+               accept="image/*,video/*" 
+               onChange={handleFileUpload}
+             />
 
-            {/* File Upload Trigger */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-slate-400 hover:text-blue-400 transition-colors p-2"
-              title="Upload Image or Video (Uses Gemini 3 Pro)"
-            >
-              <i className="fa-solid fa-paperclip"></i>
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*,video/*"
-              onChange={handleFileUpload}
-            />
+             {/* Text Input */}
+             <input
+               type="text"
+               value={inputText}
+               onChange={(e) => setInputText(e.target.value)}
+               placeholder={isActive ? "Send text to live agent..." : (config.chatProvider === 'custom' ? `Message ${config.customModelName || 'custom LLM'}...` : "Message Gemini...")}
+               className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder-slate-500"
+             />
 
-            {/* Text Input */}
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={isActive ? "Send text to live agent..." : (config.chatProvider === 'custom' ? `Message ${config.customModelName || 'custom LLM'}...` : "Message Gemini...")}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-white placeholder-slate-500"
-            />
-
-            {/* Send Button */}
-            <button
-              type="submit"
-              disabled={!inputText.trim()}
-              className="w-8 h-8 rounded-full bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 text-white flex items-center justify-center hover:bg-blue-500 transition-all"
-            >
-              <i className="fa-solid fa-arrow-up text-xs"></i>
-            </button>
-          </form>
+             {/* Send Button */}
+             <button 
+               type="submit"
+               disabled={!inputText.trim()}
+               className="w-8 h-8 rounded-full bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 text-white flex items-center justify-center hover:bg-blue-500 transition-all"
+             >
+               <i className="fa-solid fa-arrow-up text-xs"></i>
+             </button>
+           </form>
         </div>
 
         {/* Error Message */}
@@ -388,7 +380,7 @@ export default function App() {
           <i className="fa-solid fa-database"></i> Persistent Memory (Recent)
         </h3>
         {!config.supabaseUrl ? (
-          <p className="text-slate-600 text-xs italic">Configure Supabase to enable memory.</p>
+           <p className="text-slate-600 text-xs italic">Configure Supabase to enable memory.</p>
         ) : memories.length === 0 ? (
           <p className="text-slate-600 text-xs italic">No memories found. Ask the agent to remember something.</p>
         ) : (
@@ -406,11 +398,11 @@ export default function App() {
       </div>
 
       {/* Config Modal */}
-      <ConfigModal
-        isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
-        config={config}
-        onSave={handleConfigSave}
+      <ConfigModal 
+        isOpen={isConfigOpen} 
+        onClose={() => setIsConfigOpen(false)} 
+        config={config} 
+        onSave={handleConfigSave} 
       />
     </div>
   );

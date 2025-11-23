@@ -30,13 +30,13 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
   const outputContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const outputNodeRef = useRef<GainNode | null>(null);
-
+  
   // Logic Refs
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const scheduledSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const vadRef = useRef<VadDetector>(new VadDetector(config.vadThreshold, config.vadSilenceTimeout));
-
+  
   // Custom Pipeline Refs
   const audioChunksRef = useRef<Float32Array[]>([]);
   const totalAudioLengthRef = useRef(0);
@@ -104,7 +104,7 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
     nextStartTimeRef.current = 0;
     scheduledSourcesRef.current.forEach(s => s.stop());
     scheduledSourcesRef.current.clear();
-
+    
     // Clear accumulators
     currentInputRef.current = '';
     currentOutputRef.current = '';
@@ -118,21 +118,21 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
    */
   const playAudioData = async (base64Data: string) => {
     if (!outputContextRef.current || !outputNodeRef.current) return;
-
+    
     try {
       const audioBuffer = await decodeAudioData(
         base64ToUint8Array(base64Data),
         outputContextRef.current
       );
-
+      
       const source = outputContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(outputNodeRef.current);
-
+      
       // In Custom Mode, we just play immediately since it's turn based
       setStatus(AgentStatus.SPEAKING);
       source.start();
-
+      
       source.onended = () => {
         setStatus(AgentStatus.LISTENING);
       };
@@ -147,7 +147,7 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
    */
   const processCustomPipelineTurn = async () => {
     if (isProcessingTurnRef.current || audioChunksRef.current.length === 0) return;
-
+    
     const apiKey = configRef.current.apiKey || process.env.API_KEY;
     if (!apiKey) {
       setError("API Key required for Speech Recognition");
@@ -168,12 +168,12 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
       totalAudioLengthRef.current = 0;
 
       // 2. STT (Transcribe)
-      const transcription = await GeminiService.transcribeAudio(configRef.current, base64Audio, 'audio/wav');
-
+      const transcription = await GeminiService.transcribeAudio(apiKey, base64Audio, 'audio/wav');
+      
       if (!transcription || !transcription.trim()) {
-        setStatus(AgentStatus.LISTENING);
-        isProcessingTurnRef.current = false;
-        return;
+         setStatus(AgentStatus.LISTENING);
+         isProcessingTurnRef.current = false;
+         return;
       }
 
       // Add User Message
@@ -202,7 +202,7 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
 
       // 4. TTS (Gemini)
       if (responseText) {
-        const ttsAudio = await GeminiService.generateSpeech(configRef.current, responseText, configRef.current.voiceName);
+        const ttsAudio = await GeminiService.generateSpeech(apiKey, responseText, configRef.current.voiceName);
         await playAudioData(ttsAudio);
       } else {
         setStatus(AgentStatus.LISTENING);
@@ -226,7 +226,7 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
       // Common Audio Setup
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-
+      
       inputContextRef.current = inputCtx;
       outputContextRef.current = outputCtx;
 
@@ -250,31 +250,31 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
 
       scriptProcessor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
-
+        
         // Run VAD
         const isSpeaking = vadRef.current.process(inputData);
-
+        
         // State Sync
         if (isSpeaking !== vadState) {
-          vadState = isSpeaking;
-          setIsUserSpeaking(isSpeaking);
-
-          // If using Custom Pipeline, trigger turn end on silence
-          if (!useLiveApi && !isSpeaking) {
-            // Add a small delay to ensure we don't cut off end of sentence too aggressively
-            // But for simplicity in this loop, we just trigger.
-            setTimeout(() => {
-              // Only process if still silent and not already processing
-              if (!vadRef.current.process(new Float32Array(1)) && !isProcessingTurnRef.current) {
-                processCustomPipelineTurn();
-              }
-            }, 500);
-          }
+           vadState = isSpeaking;
+           setIsUserSpeaking(isSpeaking);
+           
+           // If using Custom Pipeline, trigger turn end on silence
+           if (!useLiveApi && !isSpeaking) {
+              // Add a small delay to ensure we don't cut off end of sentence too aggressively
+              // But for simplicity in this loop, we just trigger.
+              setTimeout(() => {
+                 // Only process if still silent and not already processing
+                 if (!vadRef.current.process(new Float32Array(1)) && !isProcessingTurnRef.current) {
+                    processCustomPipelineTurn();
+                 }
+              }, 500);
+           }
         }
-
+        
         // Simple volume meter
         let sum = 0;
-        for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
+        for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
         setVolume(Math.sqrt(sum / inputData.length));
 
         // --- PROVIDER SPECIFIC LOGIC ---
@@ -287,10 +287,10 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
         } else {
           // CUSTOM LLM MODE
           if (isSpeaking) {
-            // Buffer audio for STT
-            const chunk = new Float32Array(inputData);
-            audioChunksRef.current.push(chunk);
-            totalAudioLengthRef.current += chunk.length;
+             // Buffer audio for STT
+             const chunk = new Float32Array(inputData);
+             audioChunksRef.current.push(chunk);
+             totalAudioLengthRef.current += chunk.length;
           }
         }
       };
@@ -310,7 +310,7 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
             },
             onmessage: async (msg: LiveServerMessage) => {
               const content = msg.serverContent;
-
+              
               // Handle Transcriptions
               if (content?.inputTranscription?.text) {
                 currentInputRef.current += content.inputTranscription.text;
@@ -338,12 +338,12 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
 
               // Handle Interruption
               if (content?.interrupted) {
-                currentOutputRef.current = '';
-                nextStartTimeRef.current = 0;
-                for (const source of scheduledSourcesRef.current) {
-                  source.stop();
-                }
-                scheduledSourcesRef.current.clear();
+                 currentOutputRef.current = '';
+                 nextStartTimeRef.current = 0;
+                 for (const source of scheduledSourcesRef.current) {
+                   source.stop();
+                 }
+                 scheduledSourcesRef.current.clear();
               }
 
               // Handle Tool Calls
@@ -379,15 +379,15 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
                   base64ToUint8Array(audioData),
                   outputCtx
                 );
-
+                
                 const source = outputCtx.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(outputNode);
-
+                
                 const startTime = Math.max(outputCtx.currentTime, nextStartTimeRef.current);
                 source.start(startTime);
                 nextStartTimeRef.current = startTime + audioBuffer.duration;
-
+                
                 scheduledSourcesRef.current.add(source);
                 source.onended = () => {
                   scheduledSourcesRef.current.delete(source);
@@ -396,8 +396,8 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
               }
             },
             onclose: () => {
-              console.log("Session Closed");
-              setStatus(AgentStatus.DISCONNECTED);
+               console.log("Session Closed");
+               setStatus(AgentStatus.DISCONNECTED);
             },
             onerror: (err) => {
               console.error(err);
@@ -441,48 +441,49 @@ export function useLiveAgent({ config, onMemoryUpdate }: UseLiveAgentProps) {
     }]);
 
     if (configRef.current.chatProvider === 'gemini') {
-      if (sessionPromiseRef.current) {
-        const session = await sessionPromiseRef.current;
-        session.send({
-          clientContent: {
-            turns: [{ role: 'user', parts: [{ text }] }],
-            turnComplete: true
-          }
-        });
-      }
+       if (sessionPromiseRef.current) {
+         const session = await sessionPromiseRef.current;
+         session.send({
+           clientContent: {
+             turns: [{ role: 'user', parts: [{ text }] }],
+             turnComplete: true
+           }
+         });
+       }
     } else {
       // Custom Mode Text Message Injection
       setStatus(AgentStatus.THINKING);
       try {
-        const response = await CustomLlmService.sendMessage(text, configRef.current);
-        setMessages(prev => [...prev, {
+         const response = await CustomLlmService.sendMessage(text, configRef.current);
+         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'model',
           text: response,
           timestamp: Date.now()
         }]);
-
+        
         // Speak the response
-        if (configRef.current.supabaseUrl && configRef.current.supabaseKey) {
-          const ttsAudio = await GeminiService.generateSpeech(configRef.current, response, configRef.current.voiceName);
+        const apiKey = configRef.current.apiKey || process.env.API_KEY;
+        if (apiKey) {
+          const ttsAudio = await GeminiService.generateSpeech(apiKey, response, configRef.current.voiceName);
           await playAudioData(ttsAudio);
         }
       } catch (e: any) {
-        setError(e.message);
-        setStatus(AgentStatus.ERROR);
+         setError(e.message);
+         setStatus(AgentStatus.ERROR);
       }
     }
   }, []);
 
-  return {
-    connect,
-    disconnect,
-    status,
-    volume,
-    isUserSpeaking,
-    error,
-    messages,
-    setMessages,
-    sendTextMessage
+  return { 
+    connect, 
+    disconnect, 
+    status, 
+    volume, 
+    isUserSpeaking, 
+    error, 
+    messages, 
+    setMessages, 
+    sendTextMessage 
   };
 }
