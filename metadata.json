@@ -1,0 +1,8 @@
+{
+  "name": "Nexus | Live Memory Agent",
+  "description": "A personal live speech-to-speech agent with persistent memory integration, powered by Gemini 2.5 Live API.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
